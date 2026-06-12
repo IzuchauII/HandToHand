@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Resource Include="star_icon.png" />
+    <Resource Include="Images\star_icon.png" />
   </ItemGroup>
 
 </Project>

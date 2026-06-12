@@ -102,7 +102,7 @@
                             </Style>
                         </Button.Style>
 
-                        <Image Source="/star_icon.png" Width="26" Height="26">
+                        <Image Source="/Images/star_icon.png" Width="26" Height="26">
                             <Image.Effect>
                                 <DropShadowEffect Color="Orange" BlurRadius="10" ShadowDepth="0" Opacity="0.8"/>
                             </Image.Effect>

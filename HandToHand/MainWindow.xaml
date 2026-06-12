@@ -31,7 +31,7 @@
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,0,0,10">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,0,0,10" Name="ChatHistoryScrollViewer">
                     <TextBlock Name="ChatLog" 
                                Text="Ожидаю запрос" 
                                TextWrapping="Wrap" 

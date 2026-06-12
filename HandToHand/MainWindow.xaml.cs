@@ -74,6 +74,10 @@ namespace HandToHand
                 {
                     // Получаем ответ по одному слову (токену) и сразу дописываем его в окно чата на лету!
                     ChatLog.Text += token;
+
+                    // 2. АВТОСКРОЛЛ: Приказываем скроллеру прыгнуть в самый низ до упора
+                    ChatHistoryScrollViewer.ScrollToEnd();
+
                 }
             }
             catch (System.Exception ex)

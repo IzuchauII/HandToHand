@@ -5,33 +5,113 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:HandToHand"
         mc:Ignorable="d"
-        Title="MainWindow" Height="400" Width="350" Background="AliceBlue">
+        Title="HandToHand" 
+        Height="500" 
+        Width="380" 
+        Background="Transparent" 
+        WindowStartupLocation="CenterScreen" 
+        WindowStyle="None"
+        AllowsTransparency="True">
+
     <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
-        <ScrollViewer VerticalScrollBarVisibility="Visible" Margin="10">
-            <TextBlock Name="ChatLog" 
-                   Text="Привет! Я твой локальный ассистент HandToHand. Напиши что-нибудь снизу..." 
-                   TextWrapping="Wrap" 
-                   Foreground="Black" 
-                   FontSize="14"/>
-        </ScrollViewer>
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="10">
+        <Border 
+                BorderBrush="#40FFFFFF" 
+                BorderThickness="1" 
+                CornerRadius="15">
+            <Border.Background>
+                <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                    <GradientStop Color="#FF060510"/>
+                    <GradientStop Color="#FF4F449D" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
 
-            <TextBox Name="UserInput" 
-                 Width="240" 
-                 Height="30" 
-                 VerticalContentAlignment="Center" 
-                 Margin="0,0,10,0"/>
+            <Grid Margin="15">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
 
-            <Button Name="SendButton" 
-                Content="Отправить" 
-                Width="80" 
-                Height="30"
-                Click="SendButton_Click"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0,0,0,10">
+                    <TextBlock Name="ChatLog" 
+                               Text="Ожидаю запрос" 
+                               TextWrapping="Wrap" 
+                               Foreground="White"/>
+                </ScrollViewer>
 
-        </StackPanel>
+                <StackPanel Grid.Row="1" Orientation="Horizontal">
+
+                    <TextBox Name="UserInput" 
+                             Width="250" 
+                             Height="30" 
+                             VerticalContentAlignment="Center" 
+                             Margin="0,0,10,0"
+                             Padding="5,0,0,0">
+                        <TextBox.BorderBrush>
+                            <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                                <GradientStop Color="#FF1E2228"/>
+                                <GradientStop Color="White" Offset="1"/>
+                            </LinearGradientBrush>
+                        </TextBox.BorderBrush>
+                        <TextBox.Background>
+                            <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                                <GradientStop Color="#FF50459F" Offset="1"/>
+                                <GradientStop Color="#FF1E2228"/>
+                            </LinearGradientBrush>
+                        </TextBox.Background>
+                    </TextBox>
+                    <Button Name="SendButton" 
+                            Width="40" 
+                            Height="40"
+                            Click="SendButton_Click"
+                            Cursor="Hand"
+                            Margin="0,0,5,0">
+                        
+
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderBrush" Value="Transparent"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}" 
+                                                    BorderBrush="{TemplateBinding BorderBrush}" 
+                                                    CornerRadius="20">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Opacity" Value="0.9" />
+                                        <Setter Property="Background" Value="#33FFFFFF"/>
+                                    </Trigger>
+
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#88FF5500"/>
+                                        <Setter Property="RenderTransform">
+                                            <Setter.Value>
+                                                <ScaleTransform ScaleX="0.9" ScaleY="0.9"/>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+
+                        <Image Source="/star_icon.png" Width="26" Height="26">
+                            <Image.Effect>
+                                <DropShadowEffect Color="Orange" BlurRadius="10" ShadowDepth="0" Opacity="0.8"/>
+                            </Image.Effect>
+                        </Image>
+                    </Button>
+
+                </StackPanel>
+            </Grid>
+
+        </Border>
     </Grid>
 </Window>

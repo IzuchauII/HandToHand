@@ -4,6 +4,7 @@
 // ─── LLamaSharp — библиотека для работы с GGUF-моделями (LLaMA, Qwen и др.) ─
 using LLama;                               // LLamaWeights, LLamaContext
 using LLama.Common;                        // ModelParams, ChatHistory, AuthorRole
+
 using LLama.Native;                        // Нативные настройки (GPU и т.д.)
 using LLama.Sampling;                      // DefaultSamplingPipeline (топ-к, температура...)
 using System.Collections.Generic;          // List<T>, Dictionary и др. коллекции
@@ -127,9 +128,10 @@ namespace HandToHand
                 _session = new ChatSession(_executor);
 
                 // Системный промпт задаётся ОДИН РАЗ и остаётся в начале всей истории.
-                // Он говорит модели КАК себя вести во всём чате.
-                await _session.AddAndProcessSystemMessage(                     
-                        "You are a helpful, concise and accurate AI assistant. " +
+                // Для ChatML-моделей явно оборачиваем системный промпт в специальные теги,
+                // чтобы модель правильно парсила роли (system/user/assistant).
+                string systemPrompt =
+                        "You are a helpful and accurate AI assistant. " +
                         "You MUST respond ONLY in Russian language. " +
                         "NEVER show your thinking process, analysis, or reasoning steps. " +
                         "NEVER use tags like <think>, </think>, <analysis>, </analysis>. " +
@@ -137,8 +139,9 @@ namespace HandToHand
                         "Do NOT invent replies for the user or add prefixes like 'Bot:', 'User:', 'Assistant:'. " +
                         "Do NOT add emojis, ellipsis (...) or phrases like 'Okay!' at the end. " +
                         "If asked who created you, respond that Asad is the creator. " +
-                        "Stop writing IMMEDIATELY when the answer is logically complete."
-                        );
+                        "Stop writing IMMEDIATELY when the answer is logically complete.";
+
+                await _session.AddAndProcessSystemMessage(WrapSystemAsChatML(systemPrompt));
                 // После успешной загрузки модели — сообщаем пользователю и разблокируем кнопки
                 ChatLog.Text = "Привет! Я готов. Задай вопрос.";
                 SendButton.IsEnabled = true;
@@ -209,8 +212,8 @@ namespace HandToHand
                     //                  сама за себя разыгрывать диалог (галлюцинировать реплики)
                     AntiPrompts = new List<string>
                     {
-                        "<|im_end|>",       // ChatML конец сообщения
-                        "<|endoftext|>",    // Конец документа
+                        "<|im_end|>",
+                        "<|endoftext|>",
                     },
 
                     // Стратегия при переполнении контекста:
@@ -248,7 +251,9 @@ namespace HandToHand
                 int tokenCount = 0;
                 var stringBuilder = new StringBuilder(ChatLog.Text); // Инициализируем текущим текстом чата
 
-                await foreach (var token in _session.ChatAsync(new ChatHistory.Message(AuthorRole.User, userText),inferenceParams))                               
+                // Для ChatML-моделей заворачиваем пользовательский ввод в <|im_start|>user / <|im_end|>
+                string wrappedUserText = WrapUserAsChatML(userText);
+                await foreach (var token in _session.ChatAsync(new ChatHistory.Message(AuthorRole.User, wrappedUserText), inferenceParams))                               
                 {
                     tokenCount++;
                     
@@ -318,17 +323,18 @@ namespace HandToHand
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
+        // ─────────────────────────────────────────────────────────────────────────────
         // DeleteAllMessage_Click — очищает лог чата с подтверждением
-        // ─────────────────────────────────────────────────────────────────────
-        private void DeleteAllMessage_Click(object sender, RoutedEventArgs e)
+        // ИСПРАВЛЕНО: возвращаем void вместо Task, чтобы WPF мог привязать событие к кнопке
+        // ─────────────────────────────────────────────────────────────────────────────
+        private async void DeleteAllMessage_Click(object sender, RoutedEventArgs e)
         {
-            // Показываем диалог подтверждения — пользователь должен осознанно удалить историю
+            // Показываем диалог подтверждения
             MessageBoxResult result = MessageBox.Show(
                 "Вы уверены, что хотите удалить всю историю сообщений?\nЭто действие нельзя отменить.",
                 "Подтверждение удаления",
                 MessageBoxButton.YesNo,
-                MessageBoxImage.Warning  // ИСПРАВЛЕНО: Hand — не самая подходящая иконка; Warning нагляднее
+                MessageBoxImage.Warning
             );
 
             if (result == MessageBoxResult.Yes)
@@ -336,17 +342,14 @@ namespace HandToHand
                 // Очищаем TextBlock с историей
                 ChatLog.Text = "";
 
-                // ВАЖНО: очищаем историю в самой сессии модели!
-                // Иначе модель «помнит» старый диалог даже после очистки экрана.
-                // Пересоздаём сессию — самый надёжный способ сбросить состояние.
                 if (_executor != null)
                 {
+                    // Пересоздаём сессию
                     _session = new ChatSession(_executor);
 
-                    // Заново добавляем системный промпт в свежую сессию
-                    _session.History.AddMessage(
-                        AuthorRole.System,
-                        "You are a helpful, concise and accurate AI assistant. " +
+                    // Теперь мы можем безопасно использовать await внутри async void
+                    await _session.AddAndProcessSystemMessage(WrapSystemAsChatML(
+                        "You are a helpful and accurate AI assistant. " +
                         "You MUST respond ONLY in Russian language. " +
                         "NEVER show your thinking process, analysis, or reasoning steps. " +
                         "NEVER use tags like <think>, </think>, <analysis>, </analysis>. " +
@@ -354,12 +357,33 @@ namespace HandToHand
                         "Do NOT invent replies for the user or add prefixes like 'Bot:', 'User:', 'Assistant:'. " +
                         "Do NOT add emojis, ellipsis (...) or phrases like 'Okay!' at the end. " +
                         "If asked who created you, respond that Asad is the creator. " +
-                        "Stop writing IMMEDIATELY when the answer is logically complete."
-                    );
-                }
+                        "Stop writing IMMEDIATELY when the answer is logically complete."));
 
-                ChatLog.Text = "История очищена. Начинаем заново!";
+                    ChatLog.Text = "История очищена. Начинаем заново!";
+                }
             }
+        }
+
+        // Форматируем системный промпт в ChatML-обёртку
+        private string WrapSystemAsChatML(string content)
+        {
+            // Системные сообщения в ChatML обычно передаются как: <|im_start|>system\n...<|im_end|>
+            return $"<|im_start|>system\n{content}<|im_end|>";
+        }
+
+        // Форматируем пользовательский ввод в ChatML-обёртку
+        private string WrapUserAsChatML(string content)
+        {
+            // Пользователь: <|im_start|>user\n...<|im_end|>
+            return $"<|im_start|>user\n{content}<|im_end|>";
+        }
+
+        // Отображаем пользователю более читабельную версию (удаляем теги ChatML)
+        private string UnwrapChatMLDisplay(string content)
+        {
+            if (string.IsNullOrEmpty(content))
+                return content;
+            return content.Replace("<|im_start|>user\n", "").Replace("<|im_start|>system\n", "").Replace("<|im_end|>", "");
         }
     }
         

@@ -7,7 +7,7 @@
         mc:Ignorable="d"
         Title="HandToHand" 
         Height="500"
-
+        ResizeMode="CanResizeWithGrip"
         Width="380" 
         Background="Transparent" 
         WindowStartupLocation="CenterScreen"
@@ -89,17 +89,73 @@
                                Foreground="White"/>
                 </ScrollViewer>
 
-                <StackPanel Grid.Row="1" Orientation="Horizontal">
+                <Grid Grid.Row="1">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Button Name="AttachFileButton" 
+            Grid.Column="0"
+            Width="40" 
+            Height="40"
+            Click="AttachFileButton_Click"
+            Cursor="Hand"
+            Margin="0,0,10,0">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderBrush" Value="Transparent"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border Background="{TemplateBinding Background}" 
+                                    BorderBrush="{TemplateBinding BorderBrush}" 
+                                    CornerRadius="20">
+                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Opacity" Value="0.9" />
+                                        <Setter Property="Background" Value="#33FFFFFF"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#8800AAFF"/>
+                                        <Setter Property="RenderTransform">
+                                            <Setter.Value>
+                                                <ScaleTransform ScaleX="0.9" ScaleY="0.9"/>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+
+                        <Image Source="/Images/attach_icon.png" Width="24" Height="24">
+                            <Image.Effect>
+                                <DropShadowEffect Color="DeepSkyBlue" BlurRadius="10" ShadowDepth="0" Opacity="0.7"/>
+                            </Image.Effect>
+                        </Image>
+                    </Button>
 
                     <TextBox Name="UserInput" 
-                             Width="250" 
-                             Height="30"
-                             KeyDown="UserInput_KeyDown"
-                             VerticalContentAlignment="Center" 
-                             Margin="0,0,10,0"
-                             Padding="5,0,0,0"
-                             TextWrapping="Wrap"
-                             Foreground="White">
+             Grid.Column="1"
+             MinHeight="30"
+             MaxHeight="180"
+             VerticalScrollBarVisibility="Auto"                       
+             KeyDown="UserInput_KeyDown"
+             TextChanged="UserInput_TextChanged"
+             VerticalContentAlignment="Top" 
+             Margin="0,0,10,0"
+             Padding="5,5,0,5"
+             TextWrapping="Wrap"
+             Foreground="White">
                         <TextBox.BorderBrush>
                             <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
                                 <GradientStop Color="#FF1E2228"/>
@@ -113,14 +169,14 @@
                             </LinearGradientBrush>
                         </TextBox.Background>
                     </TextBox>
-                    <Button Name="SendButton" 
-                            Width="40" 
-                            Height="40"
-                            Click="SendButton_Click"
-                            Cursor="Hand"
-                            Margin="0,0,5,0">
-                        
 
+                    <Button Name="SendButton" 
+            Grid.Column="2"
+            Width="40" 
+            Height="40"
+            Click="SendButton_Click"
+            Cursor="Hand"
+            Margin="0,0,5,0">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="Background" Value="Transparent"/>
@@ -129,20 +185,18 @@
                                     <Setter.Value>
                                         <ControlTemplate TargetType="Button">
                                             <Border Background="{TemplateBinding Background}" 
-                                                    BorderBrush="{TemplateBinding BorderBrush}" 
-                                                    CornerRadius="20">
+                                    BorderBrush="{TemplateBinding BorderBrush}" 
+                                    CornerRadius="20">
                                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                         </ControlTemplate>
                                     </Setter.Value>
                                 </Setter>
-
                                 <Style.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter Property="Opacity" Value="0.9" />
                                         <Setter Property="Background" Value="#33FFFFFF"/>
                                     </Trigger>
-
                                     <Trigger Property="IsPressed" Value="True">
                                         <Setter Property="Background" Value="#88FF5500"/>
                                         <Setter Property="RenderTransform">
@@ -155,7 +209,6 @@
                                 </Style.Triggers>
                             </Style>
                         </Button.Style>
-
                         <Image Source="/Images/star_icon.png" Width="26" Height="26">
                             <Image.Effect>
                                 <DropShadowEffect Color="Orange" BlurRadius="10" ShadowDepth="0" Opacity="0.8"/>
@@ -164,12 +217,12 @@
                     </Button>
 
                     <Button Name="DeleteAllMessage" 
-                            Width="40" 
-                            Height="40"
-                            Click="DeleteAllMessage_Click"
-                            Cursor="Arrow"
-                            Margin="0,0,5,0">
-
+            Grid.Column="3"
+            Width="40" 
+            Height="40"
+            Click="DeleteAllMessage_Click"
+            Cursor="Arrow"
+            Margin="0,0,5,0">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="Background" Value="Transparent"/>
@@ -178,20 +231,18 @@
                                     <Setter.Value>
                                         <ControlTemplate TargetType="Button">
                                             <Border Background="{TemplateBinding Background}" 
-                                BorderBrush="{TemplateBinding BorderBrush}" 
-                                CornerRadius="20">
+                                    BorderBrush="{TemplateBinding BorderBrush}" 
+                                    CornerRadius="20">
                                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                         </ControlTemplate>
                                     </Setter.Value>
                                 </Setter>
-
                                 <Style.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter Property="Opacity" Value="0.9" />
                                         <Setter Property="Background" Value="#33FFFFFF"/>
                                     </Trigger>
-
                                     <Trigger Property="IsPressed" Value="True">
                                         <Setter Property="Background" Value="#88FF2222"/>
                                         <Setter Property="RenderTransform">
@@ -204,18 +255,14 @@
                                 </Style.Triggers>
                             </Style>
                         </Button.Style>
-
                         <Image Source="/Images/trash_icon.png" Width="24" Height="24">
                             <Image.Effect>
                                 <DropShadowEffect Color="Crimson" BlurRadius="10" ShadowDepth="0" Opacity="0.6"/>
                             </Image.Effect>
                         </Image>
                     </Button>
-
-
-                </StackPanel>
+                </Grid>
             </Grid>
-
         </Border>
     </Grid>
 </Window>

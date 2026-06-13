@@ -4,7 +4,8 @@
 // ─── LLamaSharp — библиотека для работы с GGUF-моделями (LLaMA, Qwen и др.) ─
 using LLama;                               // LLamaWeights, LLamaContext
 using LLama.Common;                        // ModelParams, ChatHistory, AuthorRole
-
+using Microsoft.Win32;                      // Обязательно добавь наверх для работы с OpenFileDialog
+using System.IO;                            // Для работы с файлами (File, Path, Stream и т.д.)
 using LLama.Native;                        // Нативные настройки (GPU и т.д.)
 using LLama.Sampling;                      // DefaultSamplingPipeline (топ-к, температура...)
 using System.Collections.Generic;          // List<T>, Dictionary и др. коллекции
@@ -19,6 +20,9 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using  static System.Windows.Media.Imaging.BitmapSource; // BitmapImage для загрузки изображений в WPF
+using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace HandToHand
 {
@@ -29,6 +33,8 @@ namespace HandToHand
     public partial class MainWindow : Window
     {
         // ── Поля-члены класса: хранятся всё время, пока открыто окно ─────────
+        // Здесь будет лежать путь к картинке или видео
+        private string? _attachedFilePath = null;
 
         // Параметры загрузки модели: путь к файлу, размер контекста, кол-во GPU-слоёв и где выполнять вычисления (CPU/GPU)
         private ModelParams _modelParams = null!;
@@ -85,6 +91,7 @@ namespace HandToHand
             ChatLog.Text = "Загружаю модель, подожди...";
             SendButton.IsEnabled = false;   // Нельзя слать сообщения до готовности модели
             DeleteAllMessage.IsEnabled = false; // Нельзя удалять историю, если модель ещё не загрузилась
+            AttachFileButton.IsEnabled = false; // Нельзя прикреплять файлы, если модель ещё не загрузилась
             try
             {   
                     // Путь к файлу модели. В будущем вынеси в настройки или config-файл.
@@ -146,6 +153,7 @@ namespace HandToHand
                 ChatLog.Text = "Привет! Я готов. Задай вопрос.";
                 SendButton.IsEnabled = true;
                 DeleteAllMessage.IsEnabled = true;
+                AttachFileButton.IsEnabled = true;
                 // Ставим фокус в поле ввода — удобнее для пользователя
                 UserInput.Focus();
             }
@@ -252,11 +260,51 @@ namespace HandToHand
                 var stringBuilder = new StringBuilder(ChatLog.Text); // Инициализируем текущим текстом чата
 
                 // Для ChatML-моделей заворачиваем пользовательский ввод в <|im_start|>user / <|im_end|>
+                // Если прикреплён файл (изображение или видео), попытаемся подготовить изображение для передачи
+                string? tempExtractedImage = null;
+                bool createdTempImage = false;
+                string? pathForModel = _attachedFilePath;
+
+                if (!string.IsNullOrEmpty(_attachedFilePath))
+                {
+                    try
+                    {
+                        if (IsVideoFile(_attachedFilePath))
+                        {
+                            // Попытка извлечь кадр из видео (первый кадр или кадр на 1-й секунде)
+                            tempExtractedImage = await ExtractFrameFromVideoAsync(_attachedFilePath);
+                            if (!string.IsNullOrEmpty(tempExtractedImage) && File.Exists(tempExtractedImage))
+                            {
+                                pathForModel = tempExtractedImage;
+                                createdTempImage = true;
+                            }
+                        }
+                        else if (IsImageFile(_attachedFilePath))
+                        {
+                            pathForModel = _attachedFilePath;
+                        }
+                    }
+                    catch
+                    {
+                        // Любые ошибки подготовки медиа не блокируют основной текстовый поток — просто проигнорируем
+                        pathForModel = _attachedFilePath;
+                    }
+                }
+
+                // В текущей реализации InteractiveExecutor не принимает бинарные изображения напрямую,
+                // поэтому мы добавляем в текст пользователя специальную заметку с путём к файлу.
+                // Позже можно заменить на реальную Llava/LLaVA интеграцию, если добавить соответствующий экзекутор.
+                if (!string.IsNullOrEmpty(pathForModel))
+                {
+                    userText += $"\n[AttachedFile]:{pathForModel}";
+                }
+
                 string wrappedUserText = WrapUserAsChatML(userText);
-                await foreach (var token in _session.ChatAsync(new ChatHistory.Message(AuthorRole.User, wrappedUserText), inferenceParams))                               
+
+                await foreach (var token in _session.ChatAsync(new ChatHistory.Message(AuthorRole.User, wrappedUserText), inferenceParams))
                 {
                     tokenCount++;
-                    
+
                     stringBuilder.Append(token);
                     ChatLog.Text = stringBuilder.ToString();
 
@@ -264,7 +312,12 @@ namespace HandToHand
                     {
                         ChatHistoryScrollViewer.ScrollToEnd();
                     }
-                        
+                }
+
+                // Удаляем временный файл, если мы его создали
+                if (createdTempImage && !string.IsNullOrEmpty(tempExtractedImage))
+                {
+                    try { File.Delete(tempExtractedImage); } catch { }
                 }
 
                 // Если модель вообще ничего не сгенерировала — показываем предупреждение
@@ -272,7 +325,6 @@ namespace HandToHand
                 {
                     ChatLog.Text += "[⚠️ Модель не сгенерировала ответ — попробуй переформулировать вопрос]";
                 }
-
 
             }
             catch (Exception ex)
@@ -287,8 +339,82 @@ namespace HandToHand
                 _isGenerating = false;
                 SendButton.IsEnabled = true;
                 DeleteAllMessage.IsEnabled = true;
+                AttachFileButton.IsEnabled = true;
+
+                _attachedFilePath = null;
+                AttachFileButton.Background = Brushes.Transparent; // Сбрасываем цвет кнопки обратно
+                UserInput.ToolTip = null;
+
                 // Возвращаем фокус в поле ввода — пользователь может сразу печатать следующий вопрос
                 UserInput.Focus();
+            }
+        }
+
+        // Вспомогательный метод: определяет, является ли файл видео
+        private bool IsVideoFile(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            string ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
+            return ext == ".mp4" || ext == ".avi" || ext == ".mov" || ext == ".mkv" || ext == ".webm";
+        }
+
+        // Вспомогательный метод: определяет, является ли файл изображением
+        private bool IsImageFile(string path)
+        {
+            if (string.IsNullOrEmpty(path)) return false;
+            string ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
+            return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".gif";
+        }
+
+        // Пытается извлечь кадр из видео с помощью ffmpeg (если доступен в PATH).
+        // Возвращает путь к временному изображению или null при ошибке.
+        private async Task<string?> ExtractFrameFromVideoAsync(string videoPath)
+        {
+            try
+            {
+                if (!File.Exists(videoPath)) return null;
+
+                string tempFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"extracted_frame_{Guid.NewGuid()}.png");
+
+                // Формируем параметры ffmpeg: берём кадр на 1-й секунде
+                string args = $"-y -ss 00:00:01 -i \"{videoPath}\" -vframes 1 \"{tempFile}\"";
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = "ffmpeg",
+                    Arguments = args,
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+
+                using (var proc = new Process { StartInfo = psi })
+                {
+                    var tcs = new TaskCompletionSource<int>();
+                    proc.EnableRaisingEvents = true;
+                    proc.Exited += (s, e) => tcs.TrySetResult(proc.ExitCode);
+
+                    proc.Start();
+
+                    // читаем потоки чтобы процесс не блокировался
+                    _ = proc.StandardError.ReadToEndAsync();
+                    _ = proc.StandardOutput.ReadToEndAsync();
+
+                    var exitCode = await tcs.Task.ConfigureAwait(false);
+
+                    if (exitCode == 0 && File.Exists(tempFile))
+                        return tempFile;
+                    else
+                    {
+                        try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { }
+                        return null;
+                    }
+                }
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -320,6 +446,10 @@ namespace HandToHand
 
                 // Помечаем событие как «обработанное» — WPF не добавит перенос строки в TextBox
                 e.Handled = true;
+
+                _attachedFilePath = null;
+                AttachFileButton.Background = Brushes.Transparent; // Сбрасываем цвет кнопки обратно
+                UserInput.ToolTip = null;
             }
         }
 
@@ -384,6 +514,40 @@ namespace HandToHand
             if (string.IsNullOrEmpty(content))
                 return content;
             return content.Replace("<|im_start|>user\n", "").Replace("<|im_start|>system\n", "").Replace("<|im_end|>", "");
+        }
+
+        private void UserInput_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            // Как только текст меняется и активируется скроллбар, 
+            // этот метод принудительно прокручивает TextBox в самый низ к курсору
+
+                UserInput.ScrollToEnd();
+            
+        }
+
+        private void AttachFileButton_Click(object sender, RoutedEventArgs e)
+        {
+            OpenFileDialog openFileDialog = new OpenFileDialog();
+
+            // Настраиваем фильтры, чтобы пользователь видел только медиафайлы
+            openFileDialog.Filter = "Медиа файлы (*.png;*.jpg;*.jpeg;*.mp4;*.avi)|*.png;*.jpg;*.jpeg;*.mp4;*.avi|Все файлы (*.*)|*.*";
+            openFileDialog.Title = "Выберите изображение или видео для нейросети";
+
+            if (openFileDialog.ShowDialog() == true)
+            {
+                _attachedFilePath = openFileDialog.FileName;
+
+                // --- Визуальный отклик ---
+                // Давай временно выведем имя файла прямо в TextBox, либо подсветим кнопку.
+                // Для примера изменим фон кнопки скрепки, чтобы показать, что файл внутри!
+                AttachFileButton.Background = new SolidColorBrush(Color.FromArgb(0x44, 0x00, 0xAA, 0xFF)); // Полупрозрачный голубой
+
+                // Опционально: можно вывести сообщение в чат или TextBox
+                string fileName = System.IO.Path.GetFileName(_attachedFilePath);
+                UserInput.ToolTip = $"Прикреплен файл: {fileName}"; // При наведении на TextBox будет видно файл
+            }
+
+
         }
     }
         

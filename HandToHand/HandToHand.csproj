@@ -13,6 +13,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Images\attach_icon.png" />
     <None Remove="Images\logo_icon.ico" />
     <None Remove="Images\trash_icon.png" />
     <None Remove="star_icon.png" />
@@ -22,9 +23,12 @@
     <PackageReference Include="LLamaSharp" Version="0.27.0" />
     <!-- Удалён LLamaSharp.Backend.Cpu, оставлен только CUDA-бэкенд -->
     <PackageReference Include="LLamaSharp.Backend.Cuda12.Windows" Version="0.27.0" />
+    <PackageReference Include="Xabe.FFmpeg" Version="6.0.2" />
+    <PackageReference Include="Xabe.FFmpeg.Downloader" Version="6.0.2" />
   </ItemGroup>
 
   <ItemGroup>
+    <Resource Include="Images\attach_icon.png" />
     <Resource Include="Images\logo_icon.ico" />
     <Resource Include="Images\star_icon.png" />
     <Resource Include="Images\trash_icon.png" />

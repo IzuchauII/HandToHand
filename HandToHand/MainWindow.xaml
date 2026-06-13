@@ -6,7 +6,8 @@
         xmlns:local="clr-namespace:HandToHand"
         mc:Ignorable="d"
         Title="HandToHand" 
-        Height="500" 
+        Height="500"
+
         Width="380" 
         Background="Transparent" 
         WindowStartupLocation="CenterScreen"

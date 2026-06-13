@@ -78,7 +78,7 @@ namespace HandToHand
                 await Task.Run(() =>
                 {
                     // Путь к файлу модели. В будущем вынеси в настройки или config-файл.
-                    string modelPath = @"D:\AiModels\qwen2.5-1.5b-instruct-q8_0.gguf";
+                    string modelPath = @"D:\AiModels\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
 
                     // ModelParams — описываем как загружать модель
                     _modelParams = new ModelParams(modelPath)

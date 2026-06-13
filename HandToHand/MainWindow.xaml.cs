@@ -70,7 +70,7 @@ namespace HandToHand
             // Пока модель грузится — показываем пользователю статус и блокируем кнопку
             ChatLog.Text = "⏳ Загружаю модель, подожди...";
             SendButton.IsEnabled = false;   // Нельзя слать сообщения до готовности модели
-
+            DeleteAllMessage.IsEnabled = false; // Нельзя удалять историю, если модель ещё не загрузилась
             try
             {
                 // Task.Run переносит тяжёлую синхронную работу в пул потоков,
@@ -90,7 +90,7 @@ namespace HandToHand
                         // Сколько слоёв модели выгрузить на GPU.
                         // Qwen 1.5B Q8 имеет 28 слоёв — все на GPU.
                         // Если VRAM мало — уменьшай (например, 14 = половина на GPU, остальное CPU).
-                        GpuLayerCount = 28
+                        GpuLayerCount = 33
                     };
 
                     // Загружаем веса модели из .gguf файла в память / VRAM
@@ -109,13 +109,15 @@ namespace HandToHand
                     // Он говорит модели КАК себя вести во всём чате.
                     _session.History.AddMessage(
                         AuthorRole.System,
-                        "Ты — полезный, лаконичный и точный ИИ-ассистент. " +
-                        "Отвечай прямо на поставленный вопрос. " +
-                        "Не придумывай реплики за пользователя. " +
-                        "Не пиши префиксы 'Бот:', 'User:', 'Assistant:' и подобные. " +
-                        "Не добавляй смайлики, многоточия или фразы вроде 'Хорошо!' в конце. " +
-                        "Если тебя спросят кто твой создатель — отвечай что создателем является Асад. " +
-                        "Как только ответ логически завершён — прекращай писать."
+                        "You are a helpful, concise and accurate AI assistant. " +
+                        "You MUST respond ONLY in Russian language. " +
+                        "NEVER show your thinking process, analysis, or reasoning steps. " +
+                        "NEVER use tags like <think>, </think>, <analysis>, </analysis>. " +
+                        "Answer directly and immediately without any explanation of how you thought. " +
+                        "Do NOT invent replies for the user or add prefixes like 'Bot:', 'User:', 'Assistant:'. " +
+                        "Do NOT add emojis, ellipsis (...) or phrases like 'Okay!' at the end. " +
+                        "If asked who created you, respond that Asad is the creator. " +
+                        "Stop writing IMMEDIATELY when the answer is logically complete."
                     );
                 });
 
@@ -123,7 +125,7 @@ namespace HandToHand
                 // и разблокируем интерфейс
                 ChatLog.Text = "Привет! Я готов. Задай вопрос.";
                 SendButton.IsEnabled = true;
-
+                DeleteAllMessage.IsEnabled = true;
                 // Ставим фокус в поле ввода — удобнее для пользователя
                 UserInput.Focus();
             }
@@ -175,12 +177,12 @@ namespace HandToHand
                 {
                     // Максимум токенов в одном ответе.
                     // 512 — разумный лимит для короткого чата; увеличь если нужны длинные ответы.
-                    MaxTokens = 512,
+                    MaxTokens = 1024,
 
                     // ИСПРАВЛЕНО: TokensKeep = -1 означает «всегда сохранять системный промпт».
                     // Было 0 — это говорило модели выбросить ВСЮ историю при переполнении контекста,
                     // из-за чего она теряла системный промпт и начинала нести бред.
-                    TokensKeep = -1,
+                    TokensKeep = 256,
 
                     // Стоп-токены для Qwen 2.5: при появлении любого из них генерация прекращается.
                     // <|im_end|>   — конец сообщения в формате ChatML (используется Qwen)
@@ -189,10 +191,8 @@ namespace HandToHand
                     //                  сама за себя разыгрывать диалог (галлюцинировать реплики)
                     AntiPrompts = new List<string>
                     {
-                        "<|im_end|>",
-                        "<|endoftext|>",
-                        "User:",
-                        "Вы:"
+                        "<|im_end|>",       // ChatML конец сообщения
+                        "<|endoftext|>",    // Конец документа
                     },
 
                     // Стратегия при переполнении контекста:
@@ -202,37 +202,50 @@ namespace HandToHand
                     // Параметры сэмплинга — влияют на «характер» генерации
                     SamplingPipeline = new DefaultSamplingPipeline()
                     {
+
                         // TopK = 40: на каждом шаге рассматриваем только 40 наиболее вероятных токенов.
                         // Убирает совсем безумные варианты, оставляет разнообразие.
-                        TopK = 40,
+                        TopK = 20,
 
                         // TopP = 0.9: nucleus sampling — берём токены, пока сумма вероятностей < 90%.
                         // Работает вместе с TopK, дополнительно режет «хвост» распределения.
-                        TopP = 0.9f,
+                        TopP = 0.8f,
 
                         // Temperature = 0.5: «холодная» генерация — ответы предсказуемее и точнее.
                         // 1.0 = случайно/творчески, 0.1 = очень детерминировано.
                         // Для помощника 0.3–0.6 — хороший диапазон.
-                        Temperature = 0.5f,
+                        Temperature = 0.7f,
+
+                        MinP = 0,
 
                         // RepeatPenalty = 1.15: штраф за повтор уже встреченных токенов.
                         // Уменьшает зацикливание (один и тот же смайлик / фраза по кругу).
                         // 1.0 = без штрафа, 1.3+ = агрессивно режет повторы (может исказить текст).
-                        RepeatPenalty = 1.15f
+                        RepeatPenalty = 1.1f
                     }
                 };
 
                 // ── Отправка в модель и стриминг ответа ──────────────────────
-
+                // Счётчик для отслеживания — генерирует ли модель вообще
+                int tokenCount = 0;
                 // ИСПРАВЛЕНО: ChatAsync принимает ChatHistory.Message; создаём сообщение в истории.
                 // Ранее был вызов с string, что приводило к CS1503.
                 await foreach (var token in _session.ChatAsync(
                     new ChatHistory.Message(AuthorRole.User, userText),
                     inferenceParams))
                 {
+                    tokenCount++;
                     ChatLog.Text += token;
                     ChatHistoryScrollViewer.ScrollToEnd();
                 }
+
+                // Если модель вообще ничего не сгенерировала — показываем предупреждение
+                if (tokenCount == 0)
+                {
+                    ChatLog.Text += "[⚠️ Модель не сгенерировала ответ — попробуй переформулировать вопрос]";
+                }
+
+
             }
             catch (Exception ex)
             {
@@ -310,13 +323,15 @@ namespace HandToHand
                     // Заново добавляем системный промпт в свежую сессию
                     _session.History.AddMessage(
                         AuthorRole.System,
-                        "Ты — полезный, лаконичный и точный ИИ-ассистент. " +
-                        "Отвечай прямо на поставленный вопрос. " +
-                        "Не придумывай реплики за пользователя. " +
-                        "Не пиши префиксы 'Бот:', 'User:', 'Assistant:' и подобные. " +
-                        "Не добавляй смайлики, многоточия или фразы вроде 'Хорошо!' в конце. " +
-                        "Если тебя спросят кто твой создатель — отвечай что создателем является Асад. " +
-                        "Как только ответ логически завершён — прекращай писать."
+                        "You are a helpful, concise and accurate AI assistant. " +
+                        "You MUST respond ONLY in Russian language. " +
+                        "NEVER show your thinking process, analysis, or reasoning steps. " +
+                        "NEVER use tags like <think>, </think>, <analysis>, </analysis>. " +
+                        "Answer directly and immediately without any explanation of how you thought. " +
+                        "Do NOT invent replies for the user or add prefixes like 'Bot:', 'User:', 'Assistant:'. " +
+                        "Do NOT add emojis, ellipsis (...) or phrases like 'Okay!' at the end. " +
+                        "If asked who created you, respond that Asad is the creator. " +
+                        "Stop writing IMMEDIATELY when the answer is logically complete."
                     );
                 }
 
@@ -324,4 +339,6 @@ namespace HandToHand
             }
         }
     }
+        
+
 }

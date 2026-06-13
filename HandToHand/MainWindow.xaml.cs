@@ -1,23 +1,23 @@
 ﻿// ─────────────────────────────────────────────────────────────────────────────
 // Стандартные using'и .NET / WPF — подключаем нужные пространства имён
 // ─────────────────────────────────────────────────────────────────────────────
-using System.Text;                          // StringBuilder — для склейки строк в памяти без тормозов
-using System.Collections.Generic;          // List<T>, Dictionary и др. коллекции
-using System.Windows;                       // Window, MessageBox, RoutedEventArgs и т.д.
-using System.Windows.Controls;             // Button, TextBox, ScrollViewer и т.д.
-using System.Windows.Input;                // KeyEventArgs, MouseButtonEventArgs, Keyboard
-// ─── WPF-пространства ниже нужны для анимаций / графики / навигации ─────────
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 // ─── LLamaSharp — библиотека для работы с GGUF-моделями (LLaMA, Qwen и др.) ─
 using LLama;                               // LLamaWeights, LLamaContext
 using LLama.Common;                        // ModelParams, ChatHistory, AuthorRole
 using LLama.Native;                        // Нативные настройки (GPU и т.д.)
 using LLama.Sampling;                      // DefaultSamplingPipeline (топ-к, температура...)
+using System.Collections.Generic;          // List<T>, Dictionary и др. коллекции
+using System.Text;                          // StringBuilder — для склейки строк в памяти без тормозов
+using System.Windows;                       // Window, MessageBox, RoutedEventArgs и т.д.
+using System.Windows.Controls;             // Button, TextBox, ScrollViewer и т.д.
+// ─── WPF-пространства ниже нужны для анимаций / графики / навигации ─────────
+using System.Windows.Data;
+using System.Windows.Documents;
+using System.Windows.Input;                // KeyEventArgs, MouseButtonEventArgs, Keyboard
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Navigation;
+using System.Windows.Shapes;
 
 namespace HandToHand
 {
@@ -47,7 +47,6 @@ namespace HandToHand
         // Исполнитель в интерактивном (chat) режиме — управляет подачей промпта модели
         // InteractiveExecutorState — хранит состояние генерации, токены, историю и т.д. 
         // Поддержка мультимодальных входов (текст, изображение, аудио) — в будущем можно расширить
-        // Еще стоп-слова, анти-промпты и прочие настройки генерации можно задавать здесь
         private InteractiveExecutor _executor = null!;
 
         // Сессия чата — обёртка над executor'ом: хранит историю и форматирует ChatML
@@ -127,10 +126,9 @@ namespace HandToHand
                 // LoadSession(string path, bool loadTransforms = true) / LoadSession(SessionState state, ...): Полностью восстанавливает сессию из папки или объекта состояния, позволяя продолжить диалог с того же места без повторного анализа всей истории.
                 _session = new ChatSession(_executor);
 
-                    // Системный промпт задаётся ОДИН РАЗ и остаётся в начале всей истории.
-                    // Он говорит модели КАК себя вести во всём чате.
-                    _session.History.AddMessage(
-                        AuthorRole.System,
+                // Системный промпт задаётся ОДИН РАЗ и остаётся в начале всей истории.
+                // Он говорит модели КАК себя вести во всём чате.
+                await _session.AddAndProcessSystemMessage(                     
                         "You are a helpful, concise and accurate AI assistant. " +
                         "You MUST respond ONLY in Russian language. " +
                         "NEVER show your thinking process, analysis, or reasoning steps. " +
@@ -181,9 +179,10 @@ namespace HandToHand
             // Помечаем что генерация идёт — блокируем повторные нажатия
             _isGenerating = true;
             SendButton.IsEnabled = false;   // Визуально блокируем кнопку
+            DeleteAllMessage.IsEnabled = false; // Блокируем удаление истории во время генерации
 
             // Дописываем сообщение пользователя в лог чата
-            ChatLog.Text += $"\n\nВы: {userText}\nБот: ";
+            ChatLog.Text += $"\n\nUser: {userText}\n\nБот: ";
 
             // Очищаем поле ввода сразу после отправки — удобнее пользователю
             UserInput.Text = "";
@@ -247,15 +246,20 @@ namespace HandToHand
                 // ── Отправка в модель и стриминг ответа ──────────────────────
                 // Счётчик для отслеживания — генерирует ли модель вообще
                 int tokenCount = 0;
-                // ИСПРАВЛЕНО: ChatAsync принимает ChatHistory.Message; создаём сообщение в истории.
-                // Ранее был вызов с string, что приводило к CS1503.
-                await foreach (var token in _session.ChatAsync(
-                    new ChatHistory.Message(AuthorRole.User, userText),
-                    inferenceParams))
+                var stringBuilder = new StringBuilder(ChatLog.Text); // Инициализируем текущим текстом чата
+
+                await foreach (var token in _session.ChatAsync(new ChatHistory.Message(AuthorRole.User, userText),inferenceParams))                               
                 {
                     tokenCount++;
-                    ChatLog.Text += token;
-                    ChatHistoryScrollViewer.ScrollToEnd();
+                    
+                    stringBuilder.Append(token);
+                    ChatLog.Text = stringBuilder.ToString();
+
+                    if (tokenCount % 3 == 0)
+                    {
+                        ChatHistoryScrollViewer.ScrollToEnd();
+                    }
+                        
                 }
 
                 // Если модель вообще ничего не сгенерировала — показываем предупреждение
@@ -277,7 +281,7 @@ namespace HandToHand
                 // Снимаем блокировку — разрешаем следующий запрос.
                 _isGenerating = false;
                 SendButton.IsEnabled = true;
-
+                DeleteAllMessage.IsEnabled = true;
                 // Возвращаем фокус в поле ввода — пользователь может сразу печатать следующий вопрос
                 UserInput.Focus();
             }

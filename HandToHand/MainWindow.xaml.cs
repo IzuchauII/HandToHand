@@ -40,12 +40,22 @@ namespace HandToHand
         private LLamaWeights _model = null!;
 
         // Контекст — «рабочая область» модели: хранит KV-кэш и токены диалога
+        //Может удаляться после завершения работы с моделью, чтобы освободить память
+        //Может сохраняться в файл и загружаться обратно, чтобы продолжить диалог позже
         private LLamaContext _context = null!;
 
         // Исполнитель в интерактивном (chat) режиме — управляет подачей промпта модели
+        // InteractiveExecutorState — хранит состояние генерации, токены, историю и т.д. 
+        // Поддержка мультимодальных входов (текст, изображение, аудио) — в будущем можно расширить
+        // Еще стоп-слова, анти-промпты и прочие настройки генерации можно задавать здесь
         private InteractiveExecutor _executor = null!;
 
         // Сессия чата — обёртка над executor'ом: хранит историю и форматирует ChatML
+        // Executor (ILLamaExecutor): Экзекутор (движок выполнения), который управляет процессом генерации текста, подачей промпта и взаимодействием с моделью.
+        // History (ChatHistory): Объект, хранящий текущую историю сообщений диалога.
+        // HistoryTransform (IHistoryTransform): Объект, отвечающий за преобразование структуры истории ChatHistory в плоский текст, который понимает модель, и обратно. 
+        // InputTransformPipeline (List<ITextTransform>): Конвейер (список) трансформаций для входящего текста пользователя.
+        // OutputTransform (ITextStreamTransform): Потоковый трансформер для обработки выходного текста модели.
         private ChatSession _session = null!;
 
         // Флаг «модель сейчас генерирует ответ» — защита от двойного клика на Send
@@ -76,40 +86,46 @@ namespace HandToHand
             SendButton.IsEnabled = false;   // Нельзя слать сообщения до готовности модели
             DeleteAllMessage.IsEnabled = false; // Нельзя удалять историю, если модель ещё не загрузилась
             try
-            {
-                // Task.Run переносит тяжёлую синхронную работу в пул потоков,
-                // чтобы UI (главный поток) не завис на время загрузки весов модели
-                await Task.Run(() =>
-                {
+            {   
                     // Путь к файлу модели. В будущем вынеси в настройки или config-файл.
                     string modelPath = @"D:\AiModels\Qwen3.5-9B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf";
 
                     // ModelParams — описываем как загружать модель
                     _modelParams = new ModelParams(modelPath)
                     {
-                        // Размер контекста в токенах. 4096 — стандарт для Qwen 1.5B.
-                        // Если не хватает VRAM — снизь до 2048.
+                        // Размер контекста в токенах.
                         ContextSize = 8196,
 
+                        // Включаем FlashAttention — ускоряет генерацию на GPU, если поддерживается.
                         FlashAttention = true,
 
                         // Сколько слоёв модели выгрузить на GPU.
-                        // Qwen 1.5B Q8 имеет 28 слоёв — все на GPU.
-                        // Если VRAM мало — уменьшай (например, 14 = половина на GPU, остальное CPU).
                         GpuLayerCount = 33
                     };
-                    //Исправить надо на асинхронную загрузку, чтобы не блокировать UI-поток. LLamaSharp поддерживает асинхронную загрузку весов модели через метод LoadFromFileAsync, который принимает ModelParams, CancellationToken и IProgress<float> для отслеживания прогресса загрузки. Это позволит пользователю видеть прогресс загрузки модели и при необходимости отменить её.
+
                     // Загружаем веса модели из .gguf файла в память / VRAM
-                    _model = LLamaWeights.LoadFromFile(_modelParams);
+                    _model = await LLamaWeights.LoadFromFileAsync(_modelParams);
 
                     // Создаём контекст (рабочую область) с теми же параметрами
+                    // Рабочее поле 
                     _context = _model.CreateContext(_modelParams);
 
                     // InteractiveExecutor — режим диалога: модель ждёт следующий ввод пользователя
                     _executor = new InteractiveExecutor(_context);
 
-                    // ChatSession — управляет историей диалога и форматированием ChatML-тегов
-                    _session = new ChatSession(_executor);
+                // ChatSession — управляет историей диалога и форматированием ChatML-тегов
+                // public static async Task<ChatSession> InitializeSessionFromHistoryAsync(...)
+                // Статический фабричный метод для восстановления сессии из существующей истории ChatHistory.
+                // Он автоматически выполняет предварительный расчет KV-кэша контекста(метод PrefillPromptAsync) на базе переданной истории.
+                // AddMessage(ChatHistory.Message message): Добавляет сообщение с валидацией ролей.
+                // Например, код выбросит исключение, если попытаться добавить два сообщения пользователя подряд или если сообщение ассистента (модели) не идет сразу за сообщением пользователя.
+                // AddSystemMessage(string content) это обертки над AddMessage для удобства добавления системных сообщений соответствующим ролем.
+                // RemoveLastMessage(): Удаляет самое последнее сообщение из истории.
+                // ReplaceUserMessage(oldMessage, newMessage): Заменяет старое пользовательское сообщение на новое (например, при редактировании пользователем своего вопроса).
+                // AddAndProcessMessage(...): Добавляет сообщение в историю и сразу же запускает процесс генерации ответа модели на это сообщение, с учетом всей текущей истории.
+                // SaveSession(string path): Сериализует и сохраняет состояние экзекутора, историю чата и конфигурацию трансформеров в указанную папку на диске.
+                // LoadSession(string path, bool loadTransforms = true) / LoadSession(SessionState state, ...): Полностью восстанавливает сессию из папки или объекта состояния, позволяя продолжить диалог с того же места без повторного анализа всей истории.
+                _session = new ChatSession(_executor);
 
                     // Системный промпт задаётся ОДИН РАЗ и остаётся в начале всей истории.
                     // Он говорит модели КАК себя вести во всём чате.
@@ -124,11 +140,8 @@ namespace HandToHand
                         "Do NOT add emojis, ellipsis (...) or phrases like 'Okay!' at the end. " +
                         "If asked who created you, respond that Asad is the creator. " +
                         "Stop writing IMMEDIATELY when the answer is logically complete."
-                    );
-                });
-
-                // Возвращаемся в UI-поток (после await Task.Run мы автоматически здесь)
-                // и разблокируем интерфейс
+                        );
+                // После успешной загрузки модели — сообщаем пользователю и разблокируем кнопки
                 ChatLog.Text = "Привет! Я готов. Задай вопрос.";
                 SendButton.IsEnabled = true;
                 DeleteAllMessage.IsEnabled = true;

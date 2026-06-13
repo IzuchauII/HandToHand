@@ -6,18 +6,25 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+
+    <!-- Явно собираем под x64 и указываем целевой runtime, чтобы NuGet скопировал нативные CUDA-библиотеки -->
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Images\logo_icon.ico" />
     <None Remove="star_icon.png" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="LLamaSharp" Version="0.27.0" />
-    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.27.0" />
+    <!-- Удалён LLamaSharp.Backend.Cpu, оставлен только CUDA-бэкенд -->
+    <PackageReference Include="LLamaSharp.Backend.Cuda12.Windows" Version="0.27.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <Resource Include="Images\logo_icon.ico" />
     <Resource Include="Images\star_icon.png" />
   </ItemGroup>
 

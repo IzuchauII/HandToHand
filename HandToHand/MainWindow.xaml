@@ -9,14 +9,64 @@
         Height="500" 
         Width="380" 
         Background="Transparent" 
-        WindowStartupLocation="CenterScreen" 
+        WindowStartupLocation="CenterScreen"
+        Icon="/Images/logo_icon.ico"
         WindowStyle="None"
         AllowsTransparency="True">
+        
+    <Window.Resources>
+        <Style TargetType="ScrollViewer">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
+                            <ScrollContentPresenter Grid.Column="0"/>
+
+                            <ScrollBar x:Name="PART_VerticalScrollBar"
+                                       Grid.Column="1"
+                                       Value="{TemplateBinding VerticalOffset}"
+                                       Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"
+                                       Width="4"
+                                       Margin="4,0,0,0">
+                                <ScrollBar.Template>
+                                    <ControlTemplate TargetType="ScrollBar">
+                                        <Grid Background="Transparent">
+                                            <Track x:Name="PART_Track" IsDirectionReversed="true">
+                                                <Track.Thumb>
+                                                    <Thumb>
+                                                        <Thumb.Template>
+                                                            <ControlTemplate TargetType="Thumb">
+                                                                <Border Background="AliceBlue" CornerRadius="2"/>
+                                                            </ControlTemplate>
+                                                        </Thumb.Template>
+                                                    </Thumb>
+                                                </Track.Thumb>
+                                            </Track>
+                                        </Grid>
+                                    </ControlTemplate>
+                                </ScrollBar.Template>
+                            </ScrollBar>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    
+    
     <Grid>
         <Border 
                 BorderBrush="#40FFFFFF" 
-                BorderThickness="1" 
+                BorderThickness="1"
+                MouseDown="Border_MouseDown"
                 CornerRadius="15">
             <Border.Background>
                 <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
@@ -42,10 +92,13 @@
 
                     <TextBox Name="UserInput" 
                              Width="250" 
-                             Height="30" 
+                             Height="30"
+                             KeyDown="UserInput_KeyDown"
                              VerticalContentAlignment="Center" 
                              Margin="0,0,10,0"
-                             Padding="5,0,0,0">
+                             Padding="5,0,0,0"
+                             TextWrapping="Wrap"
+                             Foreground="White">
                         <TextBox.BorderBrush>
                             <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
                                 <GradientStop Color="#FF1E2228"/>
@@ -109,9 +162,19 @@
                         </Image>
                     </Button>
 
+                    <Button Name="DeleteAllMessage" 
+                            Width="40" 
+                            Height="40"
+                            Click="DeleteAllMessage_Click"
+                            Cursor="Arrow"
+                            Margin="0,0,5,0">
+                    </Button>
+                    
                 </StackPanel>
             </Grid>
 
         </Border>
     </Grid>
 </Window>
+    
+   

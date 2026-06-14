@@ -141,24 +141,24 @@ namespace HandToHand
                 // ✨ НОВОЕ: Попытка загрузить мультимодальные веса (если они есть)
                 // Путь к mmproj-файлу — обновь в зависимости от твоей модели!
                 string? mmProjPath = await FindMmProjPathAsync(modelPath);
-                if (!string.IsNullOrEmpty(mmProjPath))
-                {
-                    try
-                    {
-                        ChatLog.Text = "Загружаю мультимодальные веса...";
-                        var mtmdParams = MtmdContextParams.Default();
-                        mtmdParams.UseGpu = false;
+                //if (!string.IsNullOrEmpty(mmProjPath))
+                //{
+                //    try
+                //    {
+                //        ChatLog.Text = "Загружаю мультимодальные веса...";
+                //        var mtmdParams = MtmdContextParams.Default();
+                //        mtmdParams.UseGpu = false;
 
-                        _mtmdWeights = await MtmdWeights.LoadFromFileAsync(mmProjPath, _model, mtmdParams);
-                        ChatLog.Text = "✓ Мультимодальная поддержка активирована!\n";
-                    }
-                    catch (Exception ex)
-                    {
-                        ChatLog.Text += $"⚠️ Не удалось загрузить mmproj: {ex.Message}\n" +
-                                       "Работа продолжится только с текстом.\n";
-                        _mtmdWeights = null;
-                    }
-                }
+                //        _mtmdWeights = await MtmdWeights.LoadFromFileAsync(mmProjPath, _model, mtmdParams);
+                //        ChatLog.Text = "✓ Мультимодальная поддержка активирована!\n";
+                //    }
+                //    catch (Exception ex)
+                //    {
+                //        ChatLog.Text += $"⚠️ Не удалось загрузить mmproj: {ex.Message}\n" +
+                //                       "Работа продолжится только с текстом.\n";
+                //        _mtmdWeights = null;
+                //    }
+                //}
 
                 // Системный промпт задаётся ОДИН РАЗ и остаётся в начале всей истории.
                 // Для ChatML-моделей явно оборачиваем системный промпт в специальные теги,
@@ -196,7 +196,7 @@ namespace HandToHand
             try
             {
                 // Ищем mmproj в той же директории, что и модель
-                string modelDir = Path.GetDirectoryName(modelPath) ?? "";
+                string modelDir = System.IO.Path.GetDirectoryName(modelPath) ?? "";
                 if (string.IsNullOrEmpty(modelDir))
                     return null;
 

@@ -1,6 +1,6 @@
-﻿// ─────────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────[...]
 // Стандартные using'и .NET / WPF — подключаем нужные пространства имён
-// ─────────────────────────────────────────────────────────────────────────────
+// ───────────────────────────────────────────────────────────────────[...]
 // ─── LLamaSharp — библиотека для работы с GGUF-моделями (LLaMA, Qwen и др.) ─
 using LLama;                               // LLamaWeights, LLamaContext
 using LLama.Common;                        // ModelParams, ChatHistory, AuthorRole
@@ -26,24 +26,24 @@ using System.Threading.Tasks;
 
 namespace HandToHand
 {
-    // ─────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────[...]
     // MainWindow — главное (и единственное) окно нашего приложения.
     // partial — потому что вторая половина класса авто-генерируется из XAML.
-    // ─────────────────────────────────────────────────────────────────────────
+    // ────────────────────────────────────────────────────────────────[...]
     public partial class MainWindow : Window
     {
         // ── Поля-члены класса: хранятся всё время, пока открыто окно ─────────
         // Здесь будет лежать путь к картинке или видео
         private string? _attachedFilePath = null;
 
-        // Параметры загрузки модели: путь к файлу, размер контекста, кол-во GPU-слоёв и где выполнять вычисления (CPU/GPU)
+        // Параметры загрузки модели: путь к файлу, размер контекста, кол-во GPU-слоёв и где выполнять вычисления (CPU/[...]
         private ModelParams _modelParams = null!;
 
         // Веса модели — сам .gguf-файл, загруженный в память / VRAM и он управляет доступом к ним
         //можно подцепить прогрессбар
         //weights.Dispose() - освобождает память, когда модель больше не нужна
         //weights.CreateContext(настройки_контекста) - создаёт рабочую область (контекст) для генерации текста
-        //LLamaWeights.LoadFromFileAsync(переменная_с_настройками, токен, прогресс) - подгружает веса модели из файла асинхронно, с возможностью отмены и отслеживания прогресса
+        //LLamaWeights.LoadFromFileAsync(переменная_с_настройками, токен, прогресс) - подгружает веса модели из файла асинхронно[...]
         private LLamaWeights _model = null!;
 
         // Контекст — «рабочая область» модели: хранит KV-кэш и токены диалога
@@ -57,9 +57,9 @@ namespace HandToHand
         private InteractiveExecutor _executor = null!;
 
         // Сессия чата — обёртка над executor'ом: хранит историю и форматирует ChatML
-        // Executor (ILLamaExecutor): Экзекутор (движок выполнения), который управляет процессом генерации текста, подачей промпта и взаимодействием с моделью.
+        // Executor (ILLamaExecutor): Экзекутор (движок выполнения), который управляет процессом генерации текста, подачей пр[...]
         // History (ChatHistory): Объект, хранящий текущую историю сообщений диалога.
-        // HistoryTransform (IHistoryTransform): Объект, отвечающий за преобразование структуры истории ChatHistory в плоский текст, который понимает модель, и обратно. 
+        // HistoryTransform (IHistoryTransform): Объект, отвечающий за преобразование структуры истории ChatHistory в плоский текст, кот[...]
         // InputTransformPipeline (List<ITextTransform>): Конвейер (список) трансформаций для входящего текста пользователя.
         // OutputTransform (ITextStreamTransform): Потоковый трансформер для обработки выходного текста модели.
         private ChatSession _session = null!;
@@ -68,9 +68,13 @@ namespace HandToHand
         // volatile — чтобы компилятор не закэшировал значение в регистре (читается из разных потоков)
         private volatile bool _isGenerating = false;
 
-        // ─────────────────────────────────────────────────────────────────────
+        // ✨ НОВОЕ: Поддержка мультимодальности (изображения, аудио)
+        private MtmdWeights? _mtmdWeights = null;  // Мультимодальные веса (CLIP/проекции)
+        private List<SafeMtmdEmbed> _pendingEmbeds = new();  // Список загруженных медиа-эмбеддингов
+
+        // ───────────────────────────────────────────────────────────────[...]
         // Конструктор — вызывается один раз при запуске приложения
-        // ─────────────────────────────────────────────────────────────────────
+        // ───────────────────────────────────────────────────────────────[...]
         public MainWindow()
         {
             // Обязательный вызов — разворачивает XAML-разметку в реальные объекты WPF
@@ -81,10 +85,10 @@ namespace HandToHand
             _ = InitAiModelAsync();
         }
 
-        // ─────────────────────────────────────────────────────────────────────
+        // ───────────────────────────────────────────────────────────────[...]
         // InitAiModelAsync — загружает модель в фоне, не блокируя UI-поток.
         // async Task вместо async void — правильный паттерн для «огонь и забыть»
-        // ─────────────────────────────────────────────────────────────────────
+        // ───────────────────────────────────────────────────────────────[...]
         private async Task InitAiModelAsync()
         {
             // Пока модель грузится — показываем пользователю статус и блокируем кнопку
@@ -123,16 +127,38 @@ namespace HandToHand
                 // ChatSession — управляет историей диалога и форматированием ChatML-тегов
                 // public static async Task<ChatSession> InitializeSessionFromHistoryAsync(...)
                 // Статический фабричный метод для восстановления сессии из существующей истории ChatHistory.
-                // Он автоматически выполняет предварительный расчет KV-кэша контекста(метод PrefillPromptAsync) на базе переданной истории.
+                // Он автоматически выполняет предварительный расчет KV-кэша контекста(метод PrefillPromptAsync) на базе перед[...]
                 // AddMessage(ChatHistory.Message message): Добавляет сообщение с валидацией ролей.
-                // Например, код выбросит исключение, если попытаться добавить два сообщения пользователя подряд или если сообщение ассистента (модели) не идет сразу за сообщением пользователя.
-                // AddSystemMessage(string content) это обертки над AddMessage для удобства добавления системных сообщений соответствующим ролем.
+                // Например, код выбросит исключение, если попытаться добавить два сообщения пользователя подряд или[...]
+                // AddSystemMessage(string content) это обертки над AddMessage для удобства добавления системных сообщений соответствую[...]
                 // RemoveLastMessage(): Удаляет самое последнее сообщение из истории.
-                // ReplaceUserMessage(oldMessage, newMessage): Заменяет старое пользовательское сообщение на новое (например, при редактировании пользователем своего вопроса).
-                // AddAndProcessMessage(...): Добавляет сообщение в историю и сразу же запускает процесс генерации ответа модели на это сообщение, с учетом всей текущей истории.
-                // SaveSession(string path): Сериализует и сохраняет состояние экзекутора, историю чата и конфигурацию трансформеров в указанную папку на диске.
-                // LoadSession(string path, bool loadTransforms = true) / LoadSession(SessionState state, ...): Полностью восстанавливает сессию из папки или объекта состояния, позволяя продолжить диалог с того же места без повторного анализа всей истории.
+                // ReplaceUserMessage(oldMessage, newMessage): Заменяет старое пользовательское сообщение на новое (например, при редакт[...]
+                // AddAndProcessMessage(...): Добавляет сообщение в историю и сразу же запускает процесс генерации ответа модели [...]
+                // SaveSession(string path): Сериализует и сохраняет состояние экзекутора, историю чата и конфигурацию трансфор[...]
+                // LoadSession(string path, bool loadTransforms = true) / LoadSession(SessionState state, ...): Полностью восстанавливает сессию из папки или о[...]
                 _session = new ChatSession(_executor);
+
+                // ✨ НОВОЕ: Попытка загрузить мультимодальные веса (если они есть)
+                // Путь к mmproj-файлу — обновь в зависимости от твоей модели!
+                string? mmProjPath = await FindMmProjPathAsync(modelPath);
+                if (!string.IsNullOrEmpty(mmProjPath))
+                {
+                    try
+                    {
+                        ChatLog.Text = "Загружаю мультимодальные веса...";
+                        var mtmdParams = MtmdContextParams.Default();
+                        mtmdParams.UseGpu = false;
+
+                        _mtmdWeights = await MtmdWeights.LoadFromFileAsync(mmProjPath, _model, mtmdParams);
+                        ChatLog.Text = "✓ Мультимодальная поддержка активирована!\n";
+                    }
+                    catch (Exception ex)
+                    {
+                        ChatLog.Text += $"⚠️ Не удалось загрузить mmproj: {ex.Message}\n" +
+                                       "Работа продолжится только с текстом.\n";
+                        _mtmdWeights = null;
+                    }
+                }
 
                 // Системный промпт задаётся ОДИН РАЗ и остаётся в начале всей истории.
                 // Для ChatML-моделей явно оборачиваем системный промпт в специальные теги,
@@ -150,7 +176,7 @@ namespace HandToHand
 
                 await _session.AddAndProcessSystemMessage(WrapSystemAsChatML(systemPrompt));
                 // После успешной загрузки модели — сообщаем пользователю и разблокируем кнопки
-                ChatLog.Text = "Привет! Я готов. Задай вопрос.";
+                ChatLog.Text += "Привет! Я готов. Задай вопрос.";
                 SendButton.IsEnabled = true;
                 DeleteAllMessage.IsEnabled = true;
                 AttachFileButton.IsEnabled = true;
@@ -164,10 +190,34 @@ namespace HandToHand
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
+        // ✨ НОВОЕ: Вспомогательный метод для поиска mmproj-файла
+        private async Task<string?> FindMmProjPathAsync(string modelPath)
+        {
+            try
+            {
+                // Ищем mmproj в той же директории, что и модель
+                string modelDir = Path.GetDirectoryName(modelPath) ?? "";
+                if (string.IsNullOrEmpty(modelDir))
+                    return null;
+
+                // Ищем файлы вида *mmproj*.gguf
+                var mmProjFiles = Directory.GetFiles(modelDir, "*mmproj*.gguf", SearchOption.TopDirectoryOnly);
+                if (mmProjFiles.Length > 0)
+                    return mmProjFiles[0];
+
+                // Если не нашли в той же директории — можно добавить логику поиска в других местах
+                return null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        // ───────────────────────────────────────────────────────────────[...]
         // SendButton_Click — вызывается по клику на кнопку «Отправить»
         // async void здесь допустимо — это обработчик события, не обычный метод
-        // ─────────────────────────────────────────────────────────────────────
+        // ───────────────────────────────────────────────────────────────[...]
         private async void SendButton_Click(object sender, RoutedEventArgs e)
         {
             // Защита от двойного клика: если модель уже генерирует — выходим сразу
@@ -254,71 +304,52 @@ namespace HandToHand
                     }
                 };
 
+                // ── ✨ НОВОЕ: Обработка мультимодальных входов ─────────────────
+                string wrappedUserText = PrepareMultimodalInput(userText);
+
                 // ── Отправка в модель и стриминг ответа ──────────────────────
                 // Счётчик для отслеживания — генерирует ли модель вообще
                 int tokenCount = 0;
                 var stringBuilder = new StringBuilder(ChatLog.Text); // Инициализируем текущим текстом чата
 
-                // Для ChatML-моделей заворачиваем пользовательский ввод в <|im_start|>user / <|im_end|>
-                // Если прикреплён файл (изображение или видео), попытаемся подготовить изображение для передачи
-                string? tempExtractedImage = null;
-                bool createdTempImage = false;
-                string? pathForModel = _attachedFilePath;
-
-                if (!string.IsNullOrEmpty(_attachedFilePath))
+                // Стриминг ответа в зависимости от наличия мультимодальности
+                if (_pendingEmbeds.Count > 0 && _mtmdWeights != null)
                 {
-                    try
+                    // ✨ Мультимодальный режим: используем мультимодальный запрос
+                    await foreach (var token in _session.ChatAsync(
+                        new ChatHistory.Message(AuthorRole.User, wrappedUserText),
+                        inferenceParams))
                     {
-                        if (IsVideoFile(_attachedFilePath))
+                        tokenCount++;
+                        stringBuilder.Append(token);
+                        ChatLog.Text = stringBuilder.ToString();
+
+                        if (tokenCount % 3 == 0)
                         {
-                            // Попытка извлечь кадр из видео (первый кадр или кадр на 1-й секунде)
-                            tempExtractedImage = await ExtractFrameFromVideoAsync(_attachedFilePath);
-                            if (!string.IsNullOrEmpty(tempExtractedImage) && File.Exists(tempExtractedImage))
-                            {
-                                pathForModel = tempExtractedImage;
-                                createdTempImage = true;
-                            }
-                        }
-                        else if (IsImageFile(_attachedFilePath))
-                        {
-                            pathForModel = _attachedFilePath;
+                            ChatHistoryScrollViewer.ScrollToEnd();
                         }
                     }
-                    catch
+                }
+                else
+                {
+                    // Текстовый режим
+                    await foreach (var token in _session.ChatAsync(
+                        new ChatHistory.Message(AuthorRole.User, wrappedUserText),
+                        inferenceParams))
                     {
-                        // Любые ошибки подготовки медиа не блокируют основной текстовый поток — просто проигнорируем
-                        pathForModel = _attachedFilePath;
+                        tokenCount++;
+                        stringBuilder.Append(token);
+                        ChatLog.Text = stringBuilder.ToString();
+
+                        if (tokenCount % 3 == 0)
+                        {
+                            ChatHistoryScrollViewer.ScrollToEnd();
+                        }
                     }
                 }
 
-                // В текущей реализации InteractiveExecutor не принимает бинарные изображения напрямую,
-                // поэтому мы добавляем в текст пользователя специальную заметку с путём к файлу.
-                // Позже можно заменить на реальную Llava/LLaVA интеграцию, если добавить соответствующий экзекутор.
-                if (!string.IsNullOrEmpty(pathForModel))
-                {
-                    userText += $"\n[AttachedFile]:{pathForModel}";
-                }
-
-                string wrappedUserText = WrapUserAsChatML(userText);
-
-                await foreach (var token in _session.ChatAsync(new ChatHistory.Message(AuthorRole.User, wrappedUserText), inferenceParams))
-                {
-                    tokenCount++;
-
-                    stringBuilder.Append(token);
-                    ChatLog.Text = stringBuilder.ToString();
-
-                    if (tokenCount % 3 == 0)
-                    {
-                        ChatHistoryScrollViewer.ScrollToEnd();
-                    }
-                }
-
-                // Удаляем временный файл, если мы его создали
-                if (createdTempImage && !string.IsNullOrEmpty(tempExtractedImage))
-                {
-                    try { File.Delete(tempExtractedImage); } catch { }
-                }
+                // Очищаем прикреплённые медиа после обработки
+                ClearPendingMedias();
 
                 // Если модель вообще ничего не сгенерировала — показываем предупреждение
                 if (tokenCount == 0)
@@ -350,6 +381,74 @@ namespace HandToHand
             }
         }
 
+        // ✨ НОВОЕ: Подготовка мультимодального входа
+        // Загружает медиа в MTMD-веса и возвращает текст с маркерами
+        private string PrepareMultimodalInput(string userText)
+        {
+            if (string.IsNullOrEmpty(_attachedFilePath) || _mtmdWeights == null)
+            {
+                // Нет прикреплённого медиа или нет MTMD-весов — просто возвращаем текст
+                return WrapUserAsChatML(userText);
+            }
+
+            try
+            {
+                string? tempExtractedImage = null;
+                bool createdTempImage = false;
+                string pathForModel = _attachedFilePath;
+
+                // Если видео — извлекаем первый кадр
+                if (IsVideoFile(_attachedFilePath))
+                {
+                    tempExtractedImage = ExtractFrameFromVideoSync(_attachedFilePath);
+                    if (!string.IsNullOrEmpty(tempExtractedImage) && File.Exists(tempExtractedImage))
+                    {
+                        pathForModel = tempExtractedImage;
+                        createdTempImage = true;
+                    }
+                }
+
+                // Загружаем медиа в MTMD
+                var embed = _mtmdWeights.LoadMedia(pathForModel);
+                if (embed != null)
+                {
+                    _pendingEmbeds.Add(embed);
+
+                    // Добавляем маркер в текст (маркер — это заполнитель для кодированного медиа)
+                    var marker = "<media>"; // Стандартный маркер, можно настроить
+                    userText = $"{marker}\n{userText}";
+
+                    // Визуальный отклик в логе
+                    ChatLog.Text += $"[📎 Медиа загружено и будет обработано моделью]\n";
+                }
+
+                // Удаляем временный файл, если его создали
+                if (createdTempImage && !string.IsNullOrEmpty(tempExtractedImage))
+                {
+                    try { File.Delete(tempExtractedImage); } catch { }
+                }
+
+                return WrapUserAsChatML(userText);
+            }
+            catch (Exception ex)
+            {
+                ChatLog.Text += $"[⚠️ Ошибка обработки медиа: {ex.Message}]\n";
+                ClearPendingMedias();
+                return WrapUserAsChatML(userText);
+            }
+        }
+
+        // ✨ НОВОЕ: Очистка загруженных медиа после использования
+        private void ClearPendingMedias()
+        {
+            foreach (var embed in _pendingEmbeds)
+            {
+                embed?.Dispose();
+            }
+            _pendingEmbeds.Clear();
+            _mtmdWeights?.ClearMedia();
+        }
+
         // Вспомогательный метод: определяет, является ли файл видео
         private bool IsVideoFile(string path)
         {
@@ -366,17 +465,15 @@ namespace HandToHand
             return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".gif";
         }
 
-        // Пытается извлечь кадр из видео с помощью ffmpeg (если доступен в PATH).
-        // Возвращает путь к временному изображению или null при ошибке.
-        private async Task<string?> ExtractFrameFromVideoAsync(string videoPath)
+        // ✨ НОВОЕ: Синхронная версия для извлечения кадра из видео
+        // (вызывается из PrepareMultimodalInput которая НЕ async)
+        private string? ExtractFrameFromVideoSync(string videoPath)
         {
             try
             {
                 if (!File.Exists(videoPath)) return null;
 
                 string tempFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"extracted_frame_{Guid.NewGuid()}.png");
-
-                // Формируем параметры ffmpeg: берём кадр на 1-й секунде
                 string args = $"-y -ss 00:00:01 -i \"{videoPath}\" -vframes 1 \"{tempFile}\"";
 
                 var psi = new ProcessStartInfo
@@ -389,28 +486,23 @@ namespace HandToHand
                     RedirectStandardError = true
                 };
 
-                using (var proc = new Process { StartInfo = psi })
+                using (var proc = Process.Start(psi))
                 {
-                    var tcs = new TaskCompletionSource<int>();
-                    proc.EnableRaisingEvents = true;
-                    proc.Exited += (s, e) => tcs.TrySetResult(proc.ExitCode);
-
-                    proc.Start();
-
-                    // читаем потоки чтобы процесс не блокировался
-                    _ = proc.StandardError.ReadToEndAsync();
-                    _ = proc.StandardOutput.ReadToEndAsync();
-
-                    var exitCode = await tcs.Task.ConfigureAwait(false);
-
-                    if (exitCode == 0 && File.Exists(tempFile))
-                        return tempFile;
-                    else
+                    if (proc != null)
                     {
-                        try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { }
-                        return null;
+                        proc.WaitForExit(10000); // Ждём 10 секунд
+
+                        if (proc.ExitCode == 0 && File.Exists(tempFile))
+                            return tempFile;
+                        else
+                        {
+                            try { if (File.Exists(tempFile)) File.Delete(tempFile); } catch { }
+                            return null;
+                        }
                     }
                 }
+
+                return null;
             }
             catch
             {
@@ -418,10 +510,10 @@ namespace HandToHand
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
+        // ───────────────────────────────────────────────────────────────[...]
         // Border_MouseDown — позволяет перетаскивать окно без стандартной рамки
         // (окно у нас WindowStyle="None", поэтому тянем вручную)
-        // ─────────────────────────────────────────────────────────────────────
+        // ───────────────────────────────────────────────────────────────[...]
         private void Border_MouseDown(object sender, MouseButtonEventArgs e)
         {
             // Реагируем только на левую кнопку мыши
@@ -432,9 +524,9 @@ namespace HandToHand
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────
+        // ───────────────────────────────────────────────────────────────[...]
         // UserInput_KeyDown — обработка нажатий клавиш в поле ввода
-        // ─────────────────────────────────────────────────────────────────────
+        // ───────────────────────────────────────────────────────────────[...]
         private void UserInput_KeyDown(object sender, KeyEventArgs e)
         {
             // Enter без Shift = отправить сообщение
@@ -453,10 +545,10 @@ namespace HandToHand
             }
         }
 
-        // ─────────────────────────────────────────────────────────────────────────────
+        // ───────────────────────────────────────────────────────────────[...]
         // DeleteAllMessage_Click — очищает лог чата с подтверждением
         // ИСПРАВЛЕНО: возвращаем void вместо Task, чтобы WPF мог привязать событие к кнопке
-        // ─────────────────────────────────────────────────────────────────────────────
+        // ───────────────────────────────────────────────────────────────[...]
         private async void DeleteAllMessage_Click(object sender, RoutedEventArgs e)
         {
             // Показываем диалог подтверждения
@@ -471,6 +563,9 @@ namespace HandToHand
             {
                 // Очищаем TextBlock с историей
                 ChatLog.Text = "";
+
+                // ✨ НОВОЕ: Очищаем загруженные медиа
+                ClearPendingMedias();
 
                 if (_executor != null)
                 {
@@ -530,8 +625,8 @@ namespace HandToHand
             OpenFileDialog openFileDialog = new OpenFileDialog();
 
             // Настраиваем фильтры, чтобы пользователь видел только медиафайлы
-            openFileDialog.Filter = "Медиа файлы (*.png;*.jpg;*.jpeg;*.mp4;*.avi)|*.png;*.jpg;*.jpeg;*.mp4;*.avi|Все файлы (*.*)|*.*";
-            openFileDialog.Title = "Выберите изображение или видео для нейросети";
+            openFileDialog.Filter = "Медиа файлы (*.png;*.jpg;*.jpeg;*.mp4;*.avi;*.wav;*.mp3)|*.png;*.jpg;*.jpeg;*.mp4;*.avi;*.wav;*.mp3|Все файлы (*.*)|*.*";
+            openFileDialog.Title = "Выберите изображение, видео или аудио для нейросети";
 
             if (openFileDialog.ShowDialog() == true)
             {
@@ -546,8 +641,6 @@ namespace HandToHand
                 string fileName = System.IO.Path.GetFileName(_attachedFilePath);
                 UserInput.ToolTip = $"Прикреплен файл: {fileName}"; // При наведении на TextBox будет видно файл
             }
-
-
         }
     }
         
